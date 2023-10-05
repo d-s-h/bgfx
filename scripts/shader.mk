@@ -14,7 +14,7 @@ include $(THISDIR)/tools.mk
 ifndef TARGET
 .PHONY: all
 all:
-	@echo Usage: make TARGET=# [clean, all, rebuild]
+	@echo Usage: make TARGET=# DEBUG=# [clean, all, rebuild]
 	@echo "  TARGET=0 (hlsl  - d3d11 / Windows only!)"
 	@echo "  TARGET=1 (hlsl  - d3d11 / Windows only!)"
 	@echo "  TARGET=3 (essl  - android)"
@@ -22,6 +22,7 @@ all:
 	@echo "  TARGET=5 (metal)"
 	@echo "  TARGET=6 (pssl)"
 	@echo "  TARGET=7 (spirv)"
+	@echo "  DEBUG=1 debug with no optimization"
 
 .PHONY: build
 build:
@@ -53,9 +54,15 @@ else
 ADDITIONAL_INCLUDES?=
 
 ifeq ($(TARGET), $(filter $(TARGET), 0 1))
+ifeq ($(DEBUG), 1)
+VS_FLAGS=--platform windows -p s_5_0 -O 0 --debug --disasm
+FS_FLAGS=--platform windows -p s_5_0 -O 0 --debug --disasm
+CS_FLAGS=--platform windows -p s_5_0 -O 0 --debug --disasm
+else
 VS_FLAGS=--platform windows -p s_5_0 -O 3
 FS_FLAGS=--platform windows -p s_5_0 -O 3
 CS_FLAGS=--platform windows -p s_5_0 -O 1
+endif # ifeq ($(DEBUG), 1)
 SHADER_PATH=shaders/dx11
 else
 ifeq ($(TARGET), $(filter $(TARGET), 2 3))
