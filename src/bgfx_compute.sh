@@ -82,6 +82,7 @@
 #define COMP_r32f     float
 #define COMP_r16f     float
 #define COMP_rg16f    float2
+#define COMP_rg32f    float2
 #define COMP_rgba16f  float4
 #if BGFX_SHADER_LANGUAGE_HLSL
 #	define COMP_rgba8 unorm float4
