@@ -680,6 +680,17 @@ VK_IMPORT_DEVICE
 		return VK_FALSE;
 	}
 
+	VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType,
+		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+		void* pUserData)
+	{
+		BX_TRACE("debugUtilsCallback");
+
+		return VK_FALSE;
+	}
+
 	VkResult enumerateLayerProperties(VkPhysicalDevice _physicalDevice, uint32_t* _propertyCount, VkLayerProperties* _properties)
 	{
 		return (VK_NULL_HANDLE == _physicalDevice)
@@ -1381,6 +1392,23 @@ VK_IMPORT_INSTANCE
 					, &m_debugReportCallback
 					);
 				BX_WARN(VK_SUCCESS == result, "vkCreateDebugReportCallbackEXT failed %d: %s.", result, getName(result) );
+			}
+
+			if (s_layer[Layer::VK_LAYER_KHRONOS_validation].m_instance.m_supported)
+			{
+				VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
+				debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+				debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+				debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+				debugCreateInfo.pfnUserCallback = debugUtilsCallback;
+				debugCreateInfo.pUserData = nullptr; // Optional
+
+				result = vkCreateDebugUtilsMessengerEXT(m_instance, &debugCreateInfo, nullptr, &m_debugUtilsCallback);
+				BX_WARN(VK_SUCCESS == result, "vkCreateDebugUtilsMessengerEXT failed %d: %s.", result, getName(result));
 			}
 
 			{
@@ -4432,6 +4460,8 @@ VK_IMPORT_DEVICE
 
 		VkAllocationCallbacks*   m_allocatorCb;
 		VkDebugReportCallbackEXT m_debugReportCallback;
+		VkDebugUtilsMessengerEXT m_debugUtilsCallback;
+
 		VkInstance       m_instance;
 		VkPhysicalDevice m_physicalDevice;
 		uint32_t         m_instanceApiVersion;
@@ -8454,8 +8484,9 @@ VK_DESTROY
 							, 1
 							, &currentDescriptorSet
 							, numOffset
-							, &offset
+							, (numOffset > 0) ? &offset : nullptr
 							);
+						BX_ASSERT(1, "");
 					}
 
 					if (isValid(compute.m_indirectBuffer) )

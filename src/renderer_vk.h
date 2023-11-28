@@ -123,6 +123,8 @@
 			/* VK_KHR_get_physical_device_properties2 */                               \
 			VK_IMPORT_INSTANCE_FUNC(true,  vkGetPhysicalDeviceFeatures2KHR);           \
 			VK_IMPORT_INSTANCE_FUNC(true,  vkGetPhysicalDeviceMemoryProperties2KHR);   \
+			/* VK_LAYER_KHRONOS_validation */                                                  \
+			VK_IMPORT_INSTANCE_FUNC(true,  vkCreateDebugUtilsMessengerEXT);            \
 			/* VK_EXT_debug_report */                                                  \
 			VK_IMPORT_INSTANCE_FUNC(true,  vkCreateDebugReportCallbackEXT);            \
 			VK_IMPORT_INSTANCE_FUNC(true,  vkDestroyDebugReportCallbackEXT);           \
