@@ -680,13 +680,13 @@ VK_IMPORT_DEVICE
 		return VK_FALSE;
 	}
 
-	VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(
+	VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessageCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		VkDebugUtilsMessageTypeFlagsEXT messageType,
 		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 		void* pUserData)
 	{
-		BX_TRACE("debugUtilsCallback");
+		BX_TRACE("debugUtilsMessageCallback: set a breakpoint here to debug what happened");
 
 		return VK_FALSE;
 	}
@@ -1396,19 +1396,22 @@ VK_IMPORT_INSTANCE
 
 			if (s_layer[Layer::VK_LAYER_KHRONOS_validation].m_instance.m_supported)
 			{
-				VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
-				debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-				debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-					VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-				debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-					VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-				debugCreateInfo.pfnUserCallback = debugUtilsCallback;
-				debugCreateInfo.pUserData = nullptr; // Optional
-
-				result = vkCreateDebugUtilsMessengerEXT(m_instance, &debugCreateInfo, nullptr, &m_debugUtilsCallback);
-				BX_WARN(VK_SUCCESS == result, "vkCreateDebugUtilsMessengerEXT failed %d: %s.", result, getName(result));
+				BX_WARN(vkCreateDebugUtilsMessengerEXT, "vkCreateDebugUtilsMessengerEXT isn't found");
+				if(vkCreateDebugUtilsMessengerEXT)
+				{
+					VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
+					debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+					debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+						VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+						VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+					debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+						VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+						VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+					debugCreateInfo.pfnUserCallback = debugUtilsMessageCallback;
+					debugCreateInfo.pUserData = nullptr; // Optional
+					result = vkCreateDebugUtilsMessengerEXT(m_instance, &debugCreateInfo, nullptr, &m_debugUtilsMessageCallback);
+					BX_WARN(VK_SUCCESS == result, "vkCreateDebugUtilsMessengerEXT failed %d: %s.", result, getName(result));
+				}
 			}
 
 			{
@@ -4460,7 +4463,7 @@ VK_IMPORT_DEVICE
 
 		VkAllocationCallbacks*   m_allocatorCb;
 		VkDebugReportCallbackEXT m_debugReportCallback;
-		VkDebugUtilsMessengerEXT m_debugUtilsCallback;
+		VkDebugUtilsMessengerEXT m_debugUtilsMessageCallback;
 
 		VkInstance       m_instance;
 		VkPhysicalDevice m_physicalDevice;
