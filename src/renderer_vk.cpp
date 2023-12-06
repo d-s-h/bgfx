@@ -2033,6 +2033,17 @@ VK_IMPORT_DEVICE
 				}
 			}
 
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			{
+				const uint32_t size = 10 * 1024 * 1024; // 10Mb limit per frame for both index and vertex buffers.
+				for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
+				{
+					BX_TRACE("Create scratch staging buffer %d", ii);
+					m_scratchStagingBuffer[ii].createStaging(size, 1);
+				}
+			}
+			// EBRU END
+
 			errorState = ErrorState::DescriptorCreated;
 
 			if (NULL == vkSetDebugUtilsObjectNameEXT)
@@ -2098,6 +2109,12 @@ VK_IMPORT_DEVICE
 				{
 					m_scratchBuffer[ii].destroy();
 				}
+				// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+				for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
+				{
+					m_scratchStagingBuffer[ii].destroy();
+				}
+				// EBRU END
 				vkDestroy(m_pipelineCache);
 				vkDestroy(m_descriptorPool);
 				BX_FALLTHROUGH;
@@ -2160,7 +2177,12 @@ VK_IMPORT_DEVICE
 			{
 				m_scratchBuffer[ii].destroy();
 			}
-
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
+			{
+				m_scratchStagingBuffer[ii].destroy();
+			}
+			// EBRU END
 			for (uint32_t ii = 0; ii < BX_COUNTOF(m_frameBuffers); ++ii)
 			{
 				m_frameBuffers[ii].destroy();
@@ -2244,7 +2266,10 @@ VK_IMPORT_DEVICE
 
 		void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags) override
 		{
-			m_indexBuffers[_handle.idx].create(m_commandBuffer, _mem->size, _mem->data, _flags, false);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_indexBuffers[_handle.idx].create(m_commandBuffer, _mem->size, _mem->data, _flags, false, scratchBuffer);
+			// EBRU END
 		}
 
 		void destroyIndexBuffer(IndexBufferHandle _handle) override
@@ -2265,7 +2290,10 @@ VK_IMPORT_DEVICE
 
 		void createVertexBuffer(VertexBufferHandle _handle, const Memory* _mem, VertexLayoutHandle _layoutHandle, uint16_t _flags) override
 		{
-			m_vertexBuffers[_handle.idx].create(m_commandBuffer, _mem->size, _mem->data, _layoutHandle, _flags);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_vertexBuffers[_handle.idx].create(m_commandBuffer, _mem->size, _mem->data, _layoutHandle, _flags, scratchBuffer);
+			// EBRU END
 		}
 
 		void destroyVertexBuffer(VertexBufferHandle _handle) override
@@ -2275,12 +2303,18 @@ VK_IMPORT_DEVICE
 
 		void createDynamicIndexBuffer(IndexBufferHandle _handle, uint32_t _size, uint16_t _flags) override
 		{
-			m_indexBuffers[_handle.idx].create(m_commandBuffer, _size, NULL, _flags, false);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_indexBuffers[_handle.idx].create(m_commandBuffer, _size, NULL, _flags, false, scratchBuffer);
+			// EBRU END
 		}
 
 		void updateDynamicIndexBuffer(IndexBufferHandle _handle, uint32_t _offset, uint32_t _size, const Memory* _mem) override
 		{
-			m_indexBuffers[_handle.idx].update(m_commandBuffer, _offset, bx::min<uint32_t>(_size, _mem->size), _mem->data);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_indexBuffers[_handle.idx].update(m_commandBuffer, _offset, bx::min<uint32_t>(_size, _mem->size), _mem->data, scratchBuffer);
+			// EBRU END
 		}
 
 		void destroyDynamicIndexBuffer(IndexBufferHandle _handle) override
@@ -2290,13 +2324,19 @@ VK_IMPORT_DEVICE
 
 		void createDynamicVertexBuffer(VertexBufferHandle _handle, uint32_t _size, uint16_t _flags) override
 		{
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
 			VertexLayoutHandle layoutHandle = BGFX_INVALID_HANDLE;
-			m_vertexBuffers[_handle.idx].create(m_commandBuffer, _size, NULL, layoutHandle, _flags);
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_vertexBuffers[_handle.idx].create(m_commandBuffer, _size, NULL, layoutHandle, _flags, scratchBuffer);
+			// EBRU END
 		}
 
 		void updateDynamicVertexBuffer(VertexBufferHandle _handle, uint32_t _offset, uint32_t _size, const Memory* _mem) override
 		{
-			m_vertexBuffers[_handle.idx].update(m_commandBuffer, _offset, bx::min<uint32_t>(_size, _mem->size), _mem->data);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_vertexBuffers[_handle.idx].update(m_commandBuffer, _offset, bx::min<uint32_t>(_size, _mem->size), _mem->data, scratchBuffer);
+			// EBRU END
 		}
 
 		void destroyDynamicVertexBuffer(VertexBufferHandle _handle) override
@@ -2706,8 +2746,11 @@ VK_IMPORT_DEVICE
 			const uint32_t numVertices = _numIndices*4/6;
 			if (0 < numVertices && m_backBuffer.isRenderable() )
 			{
-				m_indexBuffers[_blitter.m_ib->handle.idx].update(m_commandBuffer, 0, _numIndices*2, _blitter.m_ib->data);
-				m_vertexBuffers[_blitter.m_vb->handle.idx].update(m_commandBuffer, 0, numVertices*_blitter.m_layout.m_stride, _blitter.m_vb->data, true);
+				// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+				ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+				m_indexBuffers[_blitter.m_ib->handle.idx].update(m_commandBuffer, 0, _numIndices*2, _blitter.m_ib->data, scratchBuffer);
+				m_vertexBuffers[_blitter.m_vb->handle.idx].update(m_commandBuffer, 0, numVertices*_blitter.m_layout.m_stride, _blitter.m_vb->data, scratchBuffer, true);
+				// EBRU END
 
 				VkRenderPassBeginInfo rpbi;
 				rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -4485,6 +4528,8 @@ VK_IMPORT_DEVICE
 		int64_t m_presentElapsed;
 
 		ScratchBufferVK m_scratchBuffer[BGFX_CONFIG_MAX_FRAME_LATENCY];
+		// EBRU: Fix Vulkan perf bottleneck with staging buffers
+		ScratchBufferVK m_scratchStagingBuffer[BGFX_CONFIG_MAX_FRAME_LATENCY];
 
 		uint32_t        m_numFramesInFlight;
 		CommandQueueVK  m_cmd;
@@ -4667,6 +4712,53 @@ VK_DESTROY
 		VK_CHECK(vkMapMemory(device, m_deviceMem, 0, m_size, 0, (void**)&m_data) );
 	}
 
+	// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+	void ScratchBufferVK::createStaging(uint32_t _size, uint32_t _count)
+	{
+		const VkAllocationCallbacks* allocatorCb = s_renderVK->m_allocatorCb;
+		const VkDevice device = s_renderVK->m_device;
+		const VkPhysicalDeviceLimits& deviceLimits = s_renderVK->m_deviceProperties.limits;
+
+		const uint32_t align = uint32_t(deviceLimits.minUniformBufferOffsetAlignment);
+		const uint32_t entrySize = bx::strideAlign(_size, align);
+		const uint32_t totalSize = entrySize * _count;
+
+		VkBufferCreateInfo bci;
+		bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bci.pNext = NULL;
+		bci.flags = 0;
+		bci.size = totalSize;
+		bci.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		bci.queueFamilyIndexCount = 0;
+		bci.pQueueFamilyIndices = NULL;
+
+		VK_CHECK(vkCreateBuffer(
+			device
+			, &bci
+			, allocatorCb
+			, &m_buffer
+		));
+
+		VkMemoryRequirements mr;
+		vkGetBufferMemoryRequirements(
+			device
+			, m_buffer
+			, &mr
+		);
+
+		VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		VkResult result = s_renderVK->allocateMemory(&mr, flags, &m_deviceMem);
+
+		m_size = (uint32_t)mr.size;
+		m_pos = 0;
+
+		VK_CHECK(vkBindBufferMemory(device, m_buffer, m_deviceMem, 0));
+
+		VK_CHECK(vkMapMemory(device, m_deviceMem, 0, m_size, 0, (void**)&m_data));
+	}
+	// EBRU END
+
 	void ScratchBufferVK::destroy()
 	{
 		reset();
@@ -4719,7 +4811,8 @@ VK_DESTROY
 		VK_CHECK(vkFlushMappedMemoryRanges(device, 1, &range) );
 	}
 
-	void BufferVK::create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, uint16_t _flags, bool _vertex, uint32_t _stride)
+	// EBRU: Fix Vulkan perf bottleneck with staging buffers
+	void BufferVK::create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, uint16_t _flags, bool _vertex, ScratchBufferVK& _scratch, uint32_t _stride)
 	{
 		BX_UNUSED(_stride);
 
@@ -4758,33 +4851,31 @@ VK_DESTROY
 
 		if (!m_dynamic)
 		{
-			update(_commandBuffer, 0, _size, _data);
+			// EBRU: Fix Vulkan perf bottleneck with staging buffers
+			update(_commandBuffer, 0, _size, _data, _scratch);
 		}
 	}
 
-	void BufferVK::update(VkCommandBuffer _commandBuffer, uint32_t _offset, uint32_t _size, void* _data, bool _discard)
+	// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+	void BufferVK::update(VkCommandBuffer _commandBuffer, uint32_t _offset, uint32_t _size, void* _data, ScratchBufferVK& _scratch, bool _discard)
 	{
 		BX_UNUSED(_discard);
 
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingMem;
-		VK_CHECK(s_renderVK->createStagingBuffer(_size, &stagingBuffer, &stagingMem, _data) );
+		const uint32_t bufferOffset = _scratch.write(_data, _size);
 
 		VkBufferCopy region;
-		region.srcOffset = 0;
+		region.srcOffset = bufferOffset;
 		region.dstOffset = _offset;
 		region.size      = _size;
-		vkCmdCopyBuffer(_commandBuffer, stagingBuffer, m_buffer, 1, &region);
+		vkCmdCopyBuffer(_commandBuffer, _scratch.m_buffer, m_buffer, 1, &region);
 
 		setMemoryBarrier(
 			  _commandBuffer
 			, VK_PIPELINE_STAGE_TRANSFER_BIT
 			, VK_PIPELINE_STAGE_TRANSFER_BIT
 			);
-
-		s_renderVK->release(stagingBuffer);
-		s_renderVK->release(stagingMem);
 	}
+	// EBRU END
 
 	void BufferVK::destroy()
 	{
@@ -4797,11 +4888,13 @@ VK_DESTROY
 		}
 	}
 
-	void VertexBufferVK::create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, VertexLayoutHandle _layoutHandle, uint16_t _flags)
+	// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+	void VertexBufferVK::create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, VertexLayoutHandle _layoutHandle, uint16_t _flags, ScratchBufferVK& _scratch)
 	{
-		BufferVK::create(_commandBuffer, _size, _data, _flags, true);
+		BufferVK::create(_commandBuffer, _size, _data, _flags, true, _scratch);
 		m_layoutHandle = _layoutHandle;
 	}
+	// EBRU END
 
 	void ShaderVK::create(const Memory* _mem)
 	{
@@ -8194,14 +8287,20 @@ VK_DESTROY
 		{
 			BGFX_PROFILER_SCOPE("bgfx/Update transient index buffer", kColorResource);
 			TransientIndexBuffer* ib = _render->m_transientIb;
-			m_indexBuffers[ib->handle.idx].update(m_commandBuffer, 0, _render->m_iboffset, ib->data);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_indexBuffers[ib->handle.idx].update(m_commandBuffer, 0, _render->m_iboffset, ib->data, scratchBuffer);
+			// EBRU END
 		}
 
 		if (0 < _render->m_vboffset)
 		{
 			BGFX_PROFILER_SCOPE("bgfx/Update transient vertex buffer", kColorResource);
 			TransientVertexBuffer* vb = _render->m_transientVb;
-			m_vertexBuffers[vb->handle.idx].update(m_commandBuffer, 0, _render->m_vboffset, vb->data);
+			// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+			ScratchBufferVK& scratchBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+			m_vertexBuffers[vb->handle.idx].update(m_commandBuffer, 0, _render->m_vboffset, vb->data, scratchBuffer);
+			// EBRU END
 		}
 
 		_render->sort();
@@ -8253,6 +8352,11 @@ VK_DESTROY
 
 		ScratchBufferVK& scratchBuffer = m_scratchBuffer[m_cmd.m_currentFrameInFlight];
 		scratchBuffer.reset();
+
+		// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+		ScratchBufferVK& scratchStagingBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
+		scratchStagingBuffer.reset();
+		// EBRU END
 
 		setMemoryBarrier(
 			  m_commandBuffer
@@ -9209,6 +9313,8 @@ VK_DESTROY
 		m_presentElapsed = 0;
 
 		scratchBuffer.flush();
+		// EBRU: Fix Vulkan perf bottleneck with staging buffers
+		scratchStagingBuffer.flush();
 
 		for (uint16_t ii = 0; ii < m_numWindows; ++ii)
 		{

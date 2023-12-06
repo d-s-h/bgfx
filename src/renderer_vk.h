@@ -402,6 +402,8 @@ VK_DESTROY_FUNC(DescriptorSet);
 		}
 
 		void create(uint32_t _size, uint32_t _count);
+		// EBRU: Fix Vulkan perf bottleneck with staging buffers
+		void createStaging(uint32_t _size, uint32_t _count);
 		void destroy();
 		void reset();
 		uint32_t write(const void* _data, uint32_t _size);
@@ -425,8 +427,10 @@ VK_DESTROY_FUNC(DescriptorSet);
 		{
 		}
 
-		void create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, uint16_t _flags, bool _vertex, uint32_t _stride = 0);
-		void update(VkCommandBuffer _commandBuffer, uint32_t _offset, uint32_t _size, void* _data, bool _discard = false);
+		// EBRU BEGIN: Fix Vulkan perf bottleneck with staging buffers
+		void create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, uint16_t _flags, bool _vertex, ScratchBufferVK& _scratch, uint32_t _stride = 0);
+		void update(VkCommandBuffer _commandBuffer, uint32_t _offset, uint32_t _size, void* _data, ScratchBufferVK& _scratch, bool _discard = false);
+		// EBRU END
 		void destroy();
 
 		VkBuffer m_buffer;
@@ -446,7 +450,8 @@ VK_DESTROY_FUNC(DescriptorSet);
 
 	struct VertexBufferVK : public BufferVK
 	{
-		void create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, VertexLayoutHandle _layoutHandle, uint16_t _flags);
+		// EBRU: Fix Vulkan perf bottleneck with staging buffers
+		void create(VkCommandBuffer _commandBuffer, uint32_t _size, void* _data, VertexLayoutHandle _layoutHandle, uint16_t _flags, ScratchBufferVK& _scratch);
 
 		VertexLayoutHandle m_layoutHandle;
 	};
