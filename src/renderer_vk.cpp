@@ -1992,20 +1992,23 @@ VK_IMPORT_DEVICE
 					{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          MAX_DESCRIPTOR_SETS * BGFX_CONFIG_MAX_TEXTURE_SAMPLERS },
 				};
 
-				VkDescriptorPoolCreateInfo dpci;
-				dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-				dpci.pNext = NULL;
-				dpci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-				dpci.maxSets       = MAX_DESCRIPTOR_SETS;
-				dpci.poolSizeCount = BX_COUNTOF(dps);
-				dpci.pPoolSizes    = dps;
-
-				result = vkCreateDescriptorPool(m_device, &dpci, m_allocatorCb, &m_descriptorPool);
-
-				if (VK_SUCCESS != result)
+				for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
 				{
-					BX_TRACE("Init error: vkCreateDescriptorPool failed %d: %s.", result, getName(result) );
-					goto error;
+					VkDescriptorPoolCreateInfo dpci;
+					dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+					dpci.pNext = NULL;
+					dpci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+					dpci.maxSets = MAX_DESCRIPTOR_SETS;
+					dpci.poolSizeCount = BX_COUNTOF(dps);
+					dpci.pPoolSizes = dps;
+
+					result = vkCreateDescriptorPool(m_device, &dpci, m_allocatorCb, &m_descriptorPool[ii]);
+
+					if (VK_SUCCESS != result)
+					{
+						BX_TRACE("Init error: vkCreateDescriptorPool failed %d: %s.", result, getName(result));
+						goto error;
+					}
 				}
 
 				VkPipelineCacheCreateInfo pcci;
@@ -2116,7 +2119,10 @@ VK_IMPORT_DEVICE
 				}
 				// EBRU END
 				vkDestroy(m_pipelineCache);
-				vkDestroy(m_descriptorPool);
+				for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
+				{
+					vkDestroy(m_descriptorPool[ii]);
+				}
 				BX_FALLTHROUGH;
 
 			case ErrorState::SwapChainCreated:
@@ -2213,7 +2219,11 @@ VK_IMPORT_DEVICE
 			m_cmd.shutdown();
 
 			vkDestroy(m_pipelineCache);
-			vkDestroy(m_descriptorPool);
+
+			for (uint32_t ii = 0; ii < m_numFramesInFlight; ++ii)
+			{
+				vkDestroy(m_descriptorPool[ii]);
+			}
 
 			vkDestroyDevice(m_device, m_allocatorCb);
 
@@ -3876,7 +3886,7 @@ VK_IMPORT_DEVICE
 			VkDescriptorSetAllocateInfo dsai;
 			dsai.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			dsai.pNext              = NULL;
-			dsai.descriptorPool     = m_descriptorPool;
+			dsai.descriptorPool     = m_descriptorPool[m_cmd.m_currentFrameInFlight];
 			dsai.descriptorSetCount = 1;
 			dsai.pSetLayouts        = &program.m_descriptorSetLayout;
 
@@ -4538,7 +4548,7 @@ VK_IMPORT_DEVICE
 		VkDevice m_device;
 		uint32_t m_globalQueueFamily;
 		VkQueue  m_globalQueue;
-		VkDescriptorPool m_descriptorPool;
+		VkDescriptorPool m_descriptorPool[BGFX_CONFIG_MAX_FRAME_LATENCY];
 		VkPipelineCache  m_pipelineCache;
 
 		TimerQueryVK m_gpuTimer;
@@ -4641,7 +4651,7 @@ VK_DESTROY
 	{
 		if (VK_NULL_HANDLE != _obj)
 		{
-			vkFreeDescriptorSets(s_renderVK->m_device, s_renderVK->m_descriptorPool, 1, &_obj);
+			//vkFreeDescriptorSets(s_renderVK->m_device, s_renderVK->m_descriptorPool, 1, &_obj);
 			_obj = VK_NULL_HANDLE;
 		}
 	}
@@ -8357,6 +8367,9 @@ VK_DESTROY
 		ScratchBufferVK& scratchStagingBuffer = m_scratchStagingBuffer[m_cmd.m_currentFrameInFlight];
 		scratchStagingBuffer.reset();
 		// EBRU END
+
+		// Reset is needed now, since we don't free each anymore:
+		vkResetDescriptorPool(m_device, m_descriptorPool[m_cmd.m_currentFrameInFlight], 0);
 
 		setMemoryBarrier(
 			  m_commandBuffer
